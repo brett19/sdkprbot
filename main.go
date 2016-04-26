@@ -225,7 +225,9 @@ type RepoInfo struct {
 	Repo  string
 }
 
+var botOwners []string
 var githubClient *github.Client
+var githubUser string
 var githubToken string
 var gerritClient *gerrit.Client
 var gerritHost string
@@ -281,17 +283,28 @@ type PrStateInfo struct {
 	NumOfCommits    int
 }
 
-func IsGitHubUserBotOwner(user *github.User) bool {
-	var botOwners = []string{
-		"cb-sdk-robot",
-		"brett19",
+func IsGitHubUserBot(user *github.User) bool {
+	if user == nil || user.Login == nil {
+		return false
 	}
+
+	if *user.Login == githubUser {
+		return true
+	}
+	return false
+}
+
+func IsGitHubUserBotOwner(user *github.User) bool {
+	if user == nil || user.Login == nil {
+		return false
+	}
+
 	for i := 0; i < len(botOwners); i++ {
 		if *user.Login == botOwners[i] {
 			return true
 		}
 	}
-	return false
+	return IsGitHubUserBot(user)
 }
 
 const (
@@ -764,8 +777,11 @@ func readConfig() error {
 	}
 
 	var configData struct {
+		DryRun bool
 		GitHub struct {
-			Token string
+			User   string
+			Token  string
+			Owners []string
 		}
 		Gerrit struct {
 			Host string
@@ -788,6 +804,9 @@ func readConfig() error {
 		return makeErr("failed to parse config file", err)
 	}
 
+	isDryRun = configData.DryRun
+	botOwners = configData.GitHub.Owners
+	githubUser = configData.GitHub.User
 	githubToken = configData.GitHub.Token
 	gerritHost = configData.Gerrit.Host
 	gerritUser = configData.Gerrit.User
@@ -808,24 +827,10 @@ func readConfig() error {
 	return nil
 }
 
-type GitHubUser struct {
-	Login string
-}
-
-type GitHubRepository struct {
-	Name  string
-	Owner *GitHubUser
-}
-
-type GithubJson struct {
-	Repository *GitHubRepository
-}
-
 func githubHttpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received GitHub webhook")
 
-	var data GithubJson
-
+	var data github.WebHookPayload
 	decoder := json.NewDecoder(r.Body)
 	err := decoder.Decode(&data)
 
@@ -834,18 +839,30 @@ func githubHttpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ownerName := data.Repository.Owner.Login
-	repoName := data.Repository.Name
+	fmt.Fprintf(w, "success")
+
+	if data.Repo == nil || data.Repo.Owner == nil {
+		// No repository data in the webhook
+		return
+	}
+
+	if data.Sender != nil && IsGitHubUserBot(data.Sender) {
+		// Ignore hooks triggered by the bot itself.
+		return
+	}
+
+	ownerName := *data.Repo.Owner.Login
+	repoName := *data.Repo.Name
 
 	go ProcessProject(ownerName, repoName)
-	fmt.Fprintf(w, "success")
 }
 
 func gerritHttpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received Gerrit webhook")
 
-	go ProcessAllProjects()
 	fmt.Fprintf(w, "success")
+
+	go ProcessAllProjects()
 }
 
 func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
@@ -853,8 +870,6 @@ func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	isDryRun = true
-
 	log.Printf("Reading configuration...")
 
 	err := readConfig()
