@@ -837,14 +837,14 @@ func githubHttpHandler(w http.ResponseWriter, r *http.Request) {
 	ownerName := data.Repository.Owner.Login
 	repoName := data.Repository.Name
 
-	ProcessProject(ownerName, repoName)
+	go ProcessProject(ownerName, repoName)
 	fmt.Fprintf(w, "success")
 }
 
 func gerritHttpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received Gerrit webhook")
 
-	ProcessAllProjects()
+	go ProcessAllProjects()
 	fmt.Fprintf(w, "success")
 }
 
