@@ -11,7 +11,7 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/gregjones/httpcache"
 	"github.com/knakk/digest"
-	"github.com/libgit2/git2go"
+	"gopkg.in/libgit2/git2go.v23"
 	"golang.org/x/oauth2"
 	"io/ioutil"
 	"log"
