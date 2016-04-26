@@ -395,9 +395,11 @@ func VerifyEmailCla(email string) (bool, error) {
 
 	if err != nil {
 		if strings.Contains(err.Error(), "Not Found") {
+			log.Printf("Email was not found on Gerrit")
 			return false, nil
 		}
 
+		log.Printf("An error occured trying to locate the user on Gerrit")
 		return false, makeErr("failed to retrieve gerrit user groups", err)
 	}
 
@@ -408,6 +410,11 @@ func VerifyEmailCla(email string) (bool, error) {
 		}
 	}
 
+	if hasClaGroup {
+		log.Printf("The user was located and has signed the CLA")
+	} else {
+		log.Printf("The user was located, but they did not sign the CLA")
+	}
 	return hasClaGroup, nil
 }
 
