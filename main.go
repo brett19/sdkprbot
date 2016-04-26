@@ -855,6 +855,8 @@ func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	isDryRun = true
 
+	log.Printf("Reading configuration...")
+
 	err := readConfig()
 	if err != nil {
 		log.Printf("Failed to initalize configuration:")
@@ -862,12 +864,16 @@ func main() {
 		return
 	}
 
+	log.Printf("Initializing API clients...")
+
 	err = initClients()
 	if err != nil {
 		log.Printf("Failed to initalize clients:")
 		log.Printf("%+v", err)
 		return
 	}
+
+	log.Printf("Starting web server on :4455...")
 
 	http.HandleFunc("/", rootHttpHandler)
 	http.HandleFunc("/github", githubHttpHandler)
