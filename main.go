@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"strconv"
 )
 
 var isDryRun bool = true
@@ -150,7 +151,7 @@ func SquashHead(repo *git.Repository, baseSha, mergeCommitTitle, changeId string
 }
 
 type CsStateInfo struct {
-	ChangeNum   string
+	ChangeNum   int
 	ChangeId    string
 	Status      string
 	CurrentSha1 string
@@ -212,7 +213,7 @@ func GetChangesetState(owner, repo string, prnum int) (*CsStateInfo, error) {
 	}
 
 	return &CsStateInfo{
-		ChangeNum:   foundChangeset.ID,
+		ChangeNum:   foundChangeset.Number,
 		ChangeId:    foundChangeset.ChangeID,
 		Status:      foundChangeset.Status,
 		CurrentSha1: latestSha1,
@@ -508,11 +509,11 @@ func SendClaText(owner, repo string, prnum int, state *PrStateInfo) error {
 	return SendPrStateComment(owner, repo, prnum, message, BOTSTATE_NO_CLA, state.CurrentState == BOTSTATE_NEW)
 }
 
-func SendPushedText(owner, repo string, prnum int, state *PrStateInfo, changeNum string) error {
+func SendPushedText(owner, repo string, prnum int, state *PrStateInfo, changeNum int) error {
 	log.Printf("Sending pushed for %s/%s/%d", owner, repo, prnum)
 
 	message := "Your changes (commit: " + state.CurrentSha1 + ") have been pushed to the Couchbase Review Site:\n"
-	message += "http://review.couchbase.org/" + changeNum
+	message += "http://review.couchbase.org/" + strconv.FormatInt(int64(changeNum), 10)
 
 	if state.NumOfCommits > 1 {
 		message += "\n\n"
