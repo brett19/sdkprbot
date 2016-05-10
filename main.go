@@ -70,7 +70,7 @@ func SquashHead(repo *git.Repository, squashCount int, mergeCommitTitle, changeI
 	var squashCommits []*git.Commit
 	{
 		curCommit := topCommit
-		for i := 0; i < squashCommits; i++ {
+		for i := 0; i < squashCount; i++ {
 			squashCommits = append(squashCommits, curCommit)
 
 			curCommit = curCommit.Parent(0)
