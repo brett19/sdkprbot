@@ -617,6 +617,8 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 		return makeErr("failed to add gerrit as a remote", err)
 	}
 
+	log.Printf("Assigned remote.")
+
 	statusText := ""
 	err = reviewRemote.Push([]string{"HEAD:refs/for/master"}, &git.PushOptions{
 		RemoteCallbacks: git.RemoteCallbacks{
@@ -634,8 +636,11 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 		return makeErr("failed to push to gerrit", err)
 	}
 
+	log.Printf("Successfully pushed to Gerrit with status `%s`", statusText)
+
 	if statusText != "" {
-		if statusText == "no new changes" {
+		if statusText == "no new changes" && prstate != nil &&
+		(prstate.CurrentState == BOTSTATE_CREATED || prstate.CurrentState == BOTSTATE_UPDATED) {
 			// Nothing changed
 			return nil
 		}
