@@ -567,6 +567,7 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 		}
 		if csstate.CurrentSha1 == prstate.CurrentSha1 {
 			// Already up to date!
+			log.Printf("Nothing to do, already up to date.")
 			return nil
 		}
 	}
