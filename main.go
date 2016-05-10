@@ -51,18 +51,8 @@ func makeErr(msg string, err error) error {
 	return subError{msg, err}
 }
 
-func SquashHead(repo *git.Repository, baseSha, mergeCommitTitle, changeId string) error {
-	log.Printf("Generating squash commit for HEAD to `%s`", baseSha)
-
-	baseCommitId, err := git.NewOid(baseSha)
-	if err != nil {
-		return makeErr("invalid sha format for PR base", err)
-	}
-
-	baseCommit, err := repo.LookupCommit(baseCommitId)
-	if err != nil {
-		return makeErr("failed to locate base commit", err)
-	}
+func SquashHead(repo *git.Repository, squashCount int, mergeCommitTitle, changeId string) error {
+	log.Printf("Generating squash commit for `HEAD~0` to `HEAD~%d`", squashCount)
 
 	headRef, err := repo.Head()
 	if err != nil {
@@ -75,22 +65,20 @@ func SquashHead(repo *git.Repository, baseSha, mergeCommitTitle, changeId string
 		return makeErr("failed to locate head commit", nil)
 	}
 
+	var baseCommit *git.Commit
+
 	var squashCommits []*git.Commit
 	{
 		curCommit := topCommit
-		for i := 0; i < 100; i++ {
+		for i := 0; i < squashCommits; i++ {
 			squashCommits = append(squashCommits, curCommit)
 
 			curCommit = curCommit.Parent(0)
-			if curCommit.Id().Equal(baseCommit.Id()) {
-				curCommit = nil
-				break
-			}
 		}
-		if curCommit != nil {
-			return makeErr("failed to iterate from head to base", nil)
-		}
+		baseCommit = curCommit
 	}
+
+	log.Printf("Base Commit is `%s`", baseCommit.Id().String())
 
 	var newCommitAuthor *git.Signature
 	var newCommitCommitter *git.Signature
@@ -604,7 +592,7 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 		return makeErr("failed to clone repository head", err)
 	}
 
-	err = SquashHead(gitRepo, *pr.Base.SHA, *pr.Title, thisChangeId)
+	err = SquashHead(gitRepo, *pr.Commits, *pr.Title, thisChangeId)
 	if err != nil {
 		return err
 	}
