@@ -142,6 +142,8 @@ func SquashHead(repo *git.Repository, baseSha, mergeCommitTitle, changeId string
 		return makeErr("failed to find created squash tree", err)
 	}
 
+	log.Printf("Generated new commit message:\n%s", newCommitMsg)
+
 	_, err = repo.CreateCommit("HEAD", newCommitAuthor, newCommitCommitter, newCommitMsg, newCommitTree, baseCommit)
 	if err != nil {
 		return makeErr("failed to generate squash commit", err)
@@ -867,7 +869,12 @@ func githubHttpHandler(w http.ResponseWriter, r *http.Request) {
 	ownerName := *data.Repo.Owner.Login
 	repoName := *data.Repo.Name
 
-	go ProcessProject(ownerName, repoName)
+	go func() {
+		err := ProcessProject(ownerName, repoName)
+		if err != nil {
+			log.Printf("githubHttpHandler error: %+v\n", err)
+		}
+	}()
 }
 
 func gerritHttpHandler(w http.ResponseWriter, r *http.Request) {
@@ -875,7 +882,12 @@ func gerritHttpHandler(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintf(w, "success")
 
-	go ProcessAllProjects()
+	go func() {
+		err := ProcessAllProjects()
+		if err != nil {
+			log.Printf("gerritHttpHandler error: %+v\n", err)
+		}
+	}()
 }
 
 func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
