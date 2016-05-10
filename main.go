@@ -604,7 +604,10 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 		return makeErr("failed to clone repository head", err)
 	}
 
-	SquashHead(gitRepo, *pr.Base.SHA, *pr.Title, thisChangeId)
+	err = SquashHead(gitRepo, *pr.Base.SHA, *pr.Title, thisChangeId)
+	if err != nil {
+		return err
+	}
 
 	log.Printf("Generated squash commit with ChangeId `%s`", thisChangeId)
 
