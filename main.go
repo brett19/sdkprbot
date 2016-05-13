@@ -886,6 +886,19 @@ func gerritHttpHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func forceCheckHttpHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received Force Check request")
+
+	fmt.Fprintf(w, "Running!")
+
+	go func() {
+		err := ProcessAllProjects()
+		if err != nil {
+			log.Printf("forceCheckHttpHandler error: %+v\n", err)
+		}
+	}()
+}
+
 func checkClaHttpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received Check CLA Request")
 
@@ -954,6 +967,7 @@ func main() {
 	http.HandleFunc("/", rootHttpHandler)
 	http.HandleFunc("/github", githubHttpHandler)
 	http.HandleFunc("/gerrit", gerritHttpHandler)
+	http.HandleFunc("/forcecheck", forceCheckHttpHandler)
 	http.HandleFunc("/checkcla", checkClaHttpHandler)
 	err = http.ListenAndServe(":4455", nil)
 	if err != nil {
