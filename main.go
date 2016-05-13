@@ -11,16 +11,16 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/gregjones/httpcache"
 	"github.com/knakk/digest"
-	"gopkg.in/libgit2/git2go.v23"
 	"golang.org/x/oauth2"
+	"gopkg.in/libgit2/git2go.v23"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
-	"strconv"
 )
 
 var isDryRun bool = true
@@ -382,6 +382,10 @@ func GetPullRequestState(owner, repo string, prnum int) (*PrStateInfo, error) {
 func VerifyEmailCla(email string) (bool, error) {
 	log.Printf("Verifying CLA signed for `%s`", email)
 
+	if email == "" {
+		return false, makeErr("you must specify a non-empty email", nil)
+	}
+
 	groups, _, err := gerritClient.Accounts.ListGroups(email)
 
 	if err != nil {
@@ -634,7 +638,7 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 
 	if statusText != "" {
 		if statusText == "no new changes" && prstate != nil &&
-		(prstate.CurrentState == BOTSTATE_CREATED || prstate.CurrentState == BOTSTATE_UPDATED) {
+			(prstate.CurrentState == BOTSTATE_CREATED || prstate.CurrentState == BOTSTATE_UPDATED) {
 			// Nothing changed
 			return nil
 		}
@@ -882,6 +886,46 @@ func gerritHttpHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func checkClaHttpHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received Check CLA Request")
+
+	var target string
+	var err error
+	var res bool
+
+	email := r.FormValue("email")
+	owner := r.FormValue("owner")
+	repo := r.FormValue("repo")
+	prnum := r.FormValue("prnum")
+	if email != "" {
+		target = email
+		res, err = VerifyEmailCla(email)
+	} else if owner != "" && repo != "" {
+		prnumParsed, err := strconv.Atoi(prnum)
+		if err != nil {
+			err = makeErr("You specified an invalid numeric `prnum` value", err)
+		} else {
+			target = fmt.Sprintf("github.com/%s/%s/%d", owner, repo, prnumParsed)
+			res, err = VerifyPrAuthorClas(owner, repo, prnumParsed)
+		}
+	} else {
+		fmt.Fprintf(w, "You must specify either an email or owner/repo/prnum.")
+		return
+	}
+
+	if err != nil {
+		fmt.Fprintf(w, "Error: %s\n", err)
+		return
+	}
+
+	resText := "NOT SIGNED"
+	if res {
+		resText = "signed"
+	}
+
+	fmt.Fprintf(w, "CLA Status for `%s` is: %s\n", target, resText)
+}
+
 func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "This is just a bot...")
 }
@@ -910,6 +954,7 @@ func main() {
 	http.HandleFunc("/", rootHttpHandler)
 	http.HandleFunc("/github", githubHttpHandler)
 	http.HandleFunc("/gerrit", gerritHttpHandler)
+	http.HandleFunc("/checkcla", checkClaHttpHandler)
 	err = http.ListenAndServe(":4455", nil)
 	if err != nil {
 		log.Printf("Failed to start http listening.")
