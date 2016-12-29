@@ -939,6 +939,26 @@ func checkClaHttpHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "CLA Status for `%s` is: %s\n", target, resText)
 }
 
+func proxyRepoStats(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received Proxy Repo Stats Request")
+
+	owner := r.FormValue("owner")
+	repo := r.FormValue("repo")
+
+	clones, _, err := githubClient.Repositories.ListTrafficClones(owner, repo, &github.TrafficBreakdownOptions{
+		Per: "day",
+	})
+
+	if err != nil {
+		fmt.Fprintf(w, "Error: %s", err)
+		return
+	}
+
+	jsonWriter := json.NewEncoder(w)
+	jsonWriter.Encode(clones)
+}
+
+
 func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "This is just a bot...")
 }
@@ -969,6 +989,7 @@ func main() {
 	http.HandleFunc("/gerrit", gerritHttpHandler)
 	http.HandleFunc("/forcecheck", forceCheckHttpHandler)
 	http.HandleFunc("/checkcla", checkClaHttpHandler)
+	http.HandleFunc("/repostats", proxyRepoStats)
 	err = http.ListenAndServe(":4455", nil)
 	if err != nil {
 		log.Printf("Failed to start http listening.")
