@@ -515,7 +515,7 @@ func SendClaText(owner, repo string, prnum int, state *PrStateInfo, emails []str
 	message += " on that page to sign an 'Individual' agreement:"
 	message += " http://review.couchbase.org/#/settings/new-agreement."
 	message += "\n\n"
-	message += "Keep in mind that the emails we are seeing on the commit are as follows:"
+	message += "Keep in mind that the emails we are seeing on the commits are:"
 	for _, email := range emails {
 		message += "  " + RedactEmail(email) + "\n"
 	}
