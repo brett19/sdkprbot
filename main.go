@@ -10,7 +10,6 @@ import (
 	"github.com/brett19/go-gerrit"
 	"github.com/google/go-github/github"
 	"github.com/gregjones/httpcache"
-	"github.com/knakk/digest"
 	"golang.org/x/oauth2"
 	"gopkg.in/libgit2/git2go.v23"
 	"io/ioutil"
@@ -235,17 +234,12 @@ func gerritGitCredentialsHandler(url string, username_from_url string, allowed_t
 }
 
 func initGerritClient() error {
-	tc, err := digest.NewTransport(gerritUser, gerritPass).Client()
-	if err != nil {
-		return makeErr("failed to create gerrit digest client", err)
-	}
-
-	client, err := gerrit.NewClient("http://"+gerritHost+"/", tc)
+	client, err := gerrit.NewClient("http://"+gerritHost+"/", nil)
 	if err != nil {
 		return makeErr("failed to create gerrit client", err)
 	}
 
-	client.Authentication.SetBasicAuth(gerritUser, "")
+	client.Authentication.SetBasicAuth(gerritUser, gerritPass)
 
 	gerritClient = client
 	return nil
