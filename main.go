@@ -26,6 +26,26 @@ var isDryRun bool = true
 
 const BOT_IDENT_TAG = "::SDKBOT/PR"
 
+func RedactEmail(email string) string {
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return "REDACTION FAILED"
+	}
+	user := parts[0]
+	domain := parts[1]
+	userAllow := float32(len(user)) * 0.6
+	domainAllow := float32(len(domain)) * 0.7
+	userAllowSide := int(userAllow / 2)
+	domainAllowSide := int(domainAllow / 2)
+	userRightStart := len(user) - userAllowSide
+	domainRightStart := len(domain) - domainAllowSide
+
+	user = user[0:userAllowSide] + strings.Repeat("*", userRightStart-userAllowSide) + user[userRightStart:]
+	domain = domain[0:domainAllowSide] + strings.Repeat("*", domainRightStart-domainAllowSide) + domain[domainRightStart:]
+
+	return user + "@" + domain
+}
+
 func RandomChangeId() string {
 	b := make([]byte, sha1.Size)
 	rand.Read(b)
@@ -407,12 +427,12 @@ func VerifyEmailCla(email string) (bool, error) {
 	return hasClaGroup, nil
 }
 
-func VerifyPrAuthorClas(owner, repo string, prnum int) (bool, error) {
+func VerifyPrAuthorClas(owner, repo string, prnum int) (bool, []string, error) {
 	log.Printf("Verifying CLA signed for PR %s/%s/%d", owner, repo, prnum)
 
 	commits, _, err := githubClient.PullRequests.ListCommits(owner, repo, prnum, nil)
 	if err != nil {
-		return false, makeErr("failed to retrieve pull request commits", err)
+		return false, nil, makeErr("failed to retrieve pull request commits", err)
 	}
 
 	authorEmailMap := make(map[string]bool)
@@ -422,11 +442,16 @@ func VerifyPrAuthorClas(owner, repo string, prnum int) (bool, error) {
 		authorEmailMap[authorEmail] = false
 	}
 
+	var emails []string
+	for authorEmail := range authorEmailMap {
+		emails = append(emails, authorEmail)
+	}
+
 	allSigned := true
-	for authorEmail, _ := range authorEmailMap {
+	for authorEmail := range authorEmailMap {
 		signed, err := VerifyEmailCla(authorEmail)
 		if err != nil {
-			return false, err
+			return false, emails, err
 		}
 
 		if !signed {
@@ -434,7 +459,7 @@ func VerifyPrAuthorClas(owner, repo string, prnum int) (bool, error) {
 		}
 	}
 
-	return allSigned, nil
+	return allSigned, emails, nil
 }
 
 func SendPrStateCommentAndClose(owner, repo string, prnum int, message, state string, is_first bool) error {
@@ -481,7 +506,7 @@ func SendPrStateComment(owner, repo string, prnum int, message, state string, is
 	return nil
 }
 
-func SendClaText(owner, repo string, prnum int, state *PrStateInfo) error {
+func SendClaText(owner, repo string, prnum int, state *PrStateInfo, emails []string) error {
 	log.Printf("Sending no_cla for %s/%s/%d", owner, repo, prnum)
 
 	message := "To get this change in and collaborate in code review, please register on Gerrit"
@@ -489,6 +514,11 @@ func SendClaText(owner, repo string, prnum int, state *PrStateInfo) error {
 	message += " sign in with your GitHub account and then follow through the steps provided"
 	message += " on that page to sign an 'Individual' agreement:"
 	message += " http://review.couchbase.org/#/settings/new-agreement."
+	message += "\n\n"
+	message += "Keep in mind that the emails we are seeing on the commit are as follows:"
+	for _, email := range emails {
+		message += "  " + RedactEmail(email) + "\n"
+	}
 	message += "\n\n"
 	message += "Note: Please contact us if you have any issues registering with Gerrit!"
 	message += " If you have not signed our CLA within 7 days, the Pull Request will be"
@@ -686,7 +716,7 @@ func ProcessPullRequest(owner, repo string, prnum int) error {
 	if state.CurrentState == BOTSTATE_NEW || state.CurrentState == BOTSTATE_NO_CLA ||
 		state.CurrentState == BOTSTATE_CREATED || state.CurrentState == BOTSTATE_UPDATED {
 		// Check CLA
-		allSigned, err := VerifyPrAuthorClas(owner, repo, prnum)
+		allSigned, authorEmails, err := VerifyPrAuthorClas(owner, repo, prnum)
 		if err != nil {
 			return err
 		}
@@ -704,7 +734,7 @@ func ProcessPullRequest(owner, repo string, prnum int) error {
 				return nil
 			}
 
-			return SendClaText(owner, repo, prnum, state)
+			return SendClaText(owner, repo, prnum, state, authorEmails)
 		} else {
 			// Need to do normal process
 			return TransferPrToGerrit(owner, repo, prnum, state)
@@ -913,7 +943,7 @@ func checkClaHttpHandler(w http.ResponseWriter, r *http.Request) {
 			err = makeErr("You specified an invalid numeric `prnum` value", err)
 		} else {
 			target = fmt.Sprintf("github.com/%s/%s/%d", owner, repo, prnumParsed)
-			res, err = VerifyPrAuthorClas(owner, repo, prnumParsed)
+			res, _, err = VerifyPrAuthorClas(owner, repo, prnumParsed)
 		}
 	} else {
 		fmt.Fprintf(w, "You must specify either an email or owner/repo/prnum.")
