@@ -515,9 +515,12 @@ func SendClaText(owner, repo string, prnum int, state *PrStateInfo, emails []str
 	message += " on that page to sign an 'Individual' agreement:"
 	message += " http://review.couchbase.org/#/settings/new-agreement."
 	message += "\n\n"
-	message += "Keep in mind that the emails we are seeing on the commits are:"
-	for _, email := range emails {
-		message += "  " + RedactEmail(email) + "\n"
+	message += "Keep in mind that the emails we are seeing on the commits are: "
+	for i, email := range emails {
+		if i != 0 {
+			message += ", "
+		}
+		message += "`" + RedactEmail(email) + "`"
 	}
 	message += "\n\n"
 	message += "Note: Please contact us if you have any issues registering with Gerrit!"
@@ -981,7 +984,6 @@ func proxyRepoStats(w http.ResponseWriter, r *http.Request) {
 	jsonWriter := json.NewEncoder(w)
 	jsonWriter.Encode(clones)
 }
-
 
 func rootHttpHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "This is just a bot...")
