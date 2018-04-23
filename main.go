@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/hex"
@@ -11,7 +12,7 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/gregjones/httpcache"
 	"golang.org/x/oauth2"
-	"gopkg.in/libgit2/git2go.v23"
+	"gopkg.in/libgit2/git2go.v27"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -339,12 +340,12 @@ func GetPullRequestState(owner, repo string, prnum int) (*PrStateInfo, error) {
 
 	log.Printf("Retrieving PR state for %s/%s/%d", owner, repo, prnum)
 
-	info, _, err := githubClient.PullRequests.Get(owner, repo, prnum)
+	info, _, err := githubClient.PullRequests.Get(context.Background(), owner, repo, prnum)
 	if err != nil {
 		return nil, makeErr("failed to retieve pull request info", err)
 	}
 
-	comments, _, err := githubClient.Issues.ListComments(owner, repo, prnum, nil)
+	comments, _, err := githubClient.Issues.ListComments(context.Background(), owner, repo, prnum, nil)
 	if err != nil {
 		return nil, makeErr("failed to retrieve pull request comments", err)
 	}
@@ -430,7 +431,7 @@ func VerifyEmailCla(email string) (bool, error) {
 func VerifyPrAuthorClas(owner, repo string, prnum int) (bool, []string, error) {
 	log.Printf("Verifying CLA signed for PR %s/%s/%d", owner, repo, prnum)
 
-	commits, _, err := githubClient.PullRequests.ListCommits(owner, repo, prnum, nil)
+	commits, _, err := githubClient.PullRequests.ListCommits(context.Background(), owner, repo, prnum, nil)
 	if err != nil {
 		return false, nil, makeErr("failed to retrieve pull request commits", err)
 	}
@@ -469,7 +470,7 @@ func SendPrStateCommentAndClose(owner, repo string, prnum int, message, state st
 	}
 
 	newState := "closed"
-	_, _, err := githubClient.PullRequests.Edit(owner, repo, prnum, &github.PullRequest{
+	_, _, err := githubClient.PullRequests.Edit(context.Background(), owner, repo, prnum, &github.PullRequest{
 		State: &newState,
 	})
 	if err != nil {
@@ -496,7 +497,7 @@ func SendPrStateComment(owner, repo string, prnum int, message, state string, is
 	messageBody += strings.TrimSpace(message)
 	messageBody += "\n\n" + BOT_IDENT_TAG + ":" + state
 
-	_, _, err := githubClient.Issues.CreateComment(owner, repo, prnum, &github.IssueComment{
+	_, _, err := githubClient.Issues.CreateComment(context.Background(), owner, repo, prnum, &github.IssueComment{
 		Body: &messageBody,
 	})
 	if err != nil {
@@ -608,7 +609,7 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 		thisChangeId = csstate.ChangeId
 	}
 
-	pr, _, err := githubClient.PullRequests.Get(owner, repo, prnum)
+	pr, _, err := githubClient.PullRequests.Get(context.Background(), owner, repo, prnum)
 	if err != nil {
 		return makeErr("failed to request pull request data", err)
 	}
@@ -703,7 +704,7 @@ func TransferPrToGerrit(owner, repo string, prnum int, prstate *PrStateInfo) err
 	return nil
 }
 
-func ProcessPullRequest(owner, repo string, prnum int) error {
+func ProcessPullRequest(owner, repo string, prnum int, noCheckCla bool) error {
 	state, err := GetPullRequestState(owner, repo, prnum)
 	if err != nil {
 		return err
@@ -722,6 +723,11 @@ func ProcessPullRequest(owner, repo string, prnum int) error {
 		allSigned, authorEmails, err := VerifyPrAuthorClas(owner, repo, prnum)
 		if err != nil {
 			return err
+		}
+
+		if noCheckCla {
+			log.Printf("Skipping no_cla warning for this pull request.")
+			allSigned = true
 		}
 
 		if !allSigned {
@@ -750,7 +756,7 @@ func ProcessPullRequest(owner, repo string, prnum int) error {
 func ProcessProject(owner, repo string) error {
 	log.Printf("Processing project %s/%s", owner, repo)
 
-	prs, _, err := githubClient.PullRequests.List(owner, repo, &github.PullRequestListOptions{
+	prs, _, err := githubClient.PullRequests.List(context.Background(), owner, repo, &github.PullRequestListOptions{
 		State: "open",
 	})
 	if err != nil {
@@ -761,7 +767,7 @@ func ProcessProject(owner, repo string) error {
 		prNum := *prs[i].Number
 		log.Printf("Processing pull request %d", prNum)
 
-		err := ProcessPullRequest(owner, repo, prNum)
+		err := ProcessPullRequest(owner, repo, prNum, false)
 		if err != nil {
 			return err
 		}
@@ -926,6 +932,28 @@ func forceCheckHttpHandler(w http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+func forceTransferHandler(w http.ResponseWriter, r *http.Request) {
+	log.Printf("Received Force Transfer request")
+
+	owner := r.FormValue("owner")
+	repo := r.FormValue("repo")
+	prnum := r.FormValue("prnum")
+
+	prnumParsed, err := strconv.Atoi(prnum)
+	if err != nil {
+		err = makeErr("You specified an invalid numeric `prnum` value", err)
+	} else {
+		err = ProcessPullRequest(owner, repo, prnumParsed, true)
+	}
+
+	if err != nil {
+		fmt.Fprintf(w, "Error: %s\n", err)
+		return
+	}
+
+	fmt.Fprintf(w, "success")
+}
+
 func checkClaHttpHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received Check CLA Request")
 
@@ -972,7 +1000,7 @@ func proxyRepoStats(w http.ResponseWriter, r *http.Request) {
 	owner := r.FormValue("owner")
 	repo := r.FormValue("repo")
 
-	clones, _, err := githubClient.Repositories.ListTrafficClones(owner, repo, &github.TrafficBreakdownOptions{
+	clones, _, err := githubClient.Repositories.ListTrafficClones(context.Background(), owner, repo, &github.TrafficBreakdownOptions{
 		Per: "day",
 	})
 
@@ -1014,6 +1042,7 @@ func main() {
 	http.HandleFunc("/github", githubHttpHandler)
 	http.HandleFunc("/gerrit", gerritHttpHandler)
 	http.HandleFunc("/forcecheck", forceCheckHttpHandler)
+	http.HandleFunc("/forcetransfer", forceTransferHandler)
 	http.HandleFunc("/checkcla", checkClaHttpHandler)
 	http.HandleFunc("/repostats", proxyRepoStats)
 	err = http.ListenAndServe(":4455", nil)
