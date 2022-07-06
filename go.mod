@@ -1,6 +1,6 @@
 module github.com/brett19/sdkprbot
 
-go 1.18
+go 1.16
 
 require (
 	github.com/brett19/go-gerrit v0.0.0-20160425232112-dc9082666dae
