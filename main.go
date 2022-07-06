@@ -8,11 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/brett19/go-gerrit"
-	"github.com/google/go-github/github"
-	"github.com/gregjones/httpcache"
-	"golang.org/x/oauth2"
-	"gopkg.in/libgit2/git2go.v27"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -21,6 +16,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/brett19/go-gerrit"
+	"github.com/google/go-github/github"
+	"github.com/gregjones/httpcache"
+	git "github.com/libgit2/git2go/v27"
+	"golang.org/x/oauth2"
 )
 
 var isDryRun bool = true
