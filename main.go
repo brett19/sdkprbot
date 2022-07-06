@@ -774,6 +774,7 @@ func ProcessProject(owner, repo string) error {
 		}
 	}
 
+	log.Printf("Processed project %s/%s", owner, repo)
 	return nil
 }
 
@@ -789,6 +790,7 @@ func ProcessAllProjects() error {
 		}
 	}
 
+	log.Printf("Processed all projects")
 	return nil
 }
 
