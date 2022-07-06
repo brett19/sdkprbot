@@ -17,10 +17,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/brett19/go-gerrit"
+	"github.com/andygrunwald/go-gerrit"
 	"github.com/google/go-github/github"
 	"github.com/gregjones/httpcache"
-	git "github.com/libgit2/git2go/v27"
+	git "github.com/libgit2/git2go/v31"
 	"golang.org/x/oauth2"
 )
 
@@ -250,13 +250,13 @@ var gerritPrivateKey string
 var gerritClaGroupName string
 var allRepos []RepoInfo
 
-func gerritGitCredentialsHandler(url string, username_from_url string, allowed_types git.CredType) (git.ErrorCode, *git.Cred) {
-	errCode, creds := git.NewCredSshKey(gerritUser, gerritPublicKey, gerritPrivateKey, "")
-	return git.ErrorCode(errCode), &creds
+func gerritGitCredentialsHandler(url string, username_from_url string, allowed_types git.CredType) (*git.Cred, error) {
+	creds, err := git.NewCredSshKey(gerritUser, gerritPublicKey, gerritPrivateKey, "")
+	return creds, err
 }
 
 func initGerritClient() error {
-	client, err := gerrit.NewClient("http://"+gerritHost+"/", nil)
+	client, err := gerrit.NewClient("https://"+gerritHost+"/", nil)
 	if err != nil {
 		return makeErr("failed to create gerrit client", err)
 	}
